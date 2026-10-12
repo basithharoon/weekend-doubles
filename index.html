@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Weekend Doubles</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏸</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: court-green header band, then a two-column board (record panel + tabs) that stacks on phones with the record panel first. */
+:root {
+  --bg: #f1f5f2;
+  --surface: #ffffff;
+  --sunk: #e6ede8;
+  --fg: #142620;
+  --muted: #5b6e66;
+  --line: #d3ddd7;
+  --court: #1d6a4e;
+  --court-ink: #ffffff;
+  --shuttle: #e3a92c;
+  --shuttle-ink: #2b1f05;
+  --win: #1d7a52;
+  --loss: #b8473c;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1814; --surface: #15231d; --sunk: #1b2c25; --fg: #e4eee9; --muted: #93a79e;
+    --line: #2a3d35; --court: #2f8a67; --court-ink: #ffffff; --shuttle: #efc35a; --shuttle-ink: #2b1f05;
+    --win: #4cc08c; --loss: #ec7e72; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1814; --surface: #15231d; --sunk: #1b2c25; --fg: #e4eee9; --muted: #93a79e;
+  --line: #2a3d35; --court: #2f8a67; --court-ink: #ffffff; --shuttle: #efc35a; --shuttle-ink: #2b1f05;
+  --win: #4cc08c; --loss: #ec7e72; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+img { max-width: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--shuttle); outline-offset: 2px; }
+
+.court-band {
+  background: var(--court); color: var(--court-ink);
+  background-image:
+    linear-gradient(90deg, transparent calc(50% - 1px), rgba(255,255,255,.35) calc(50% - 1px), rgba(255,255,255,.35) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(0deg, transparent 18px, rgba(255,255,255,.22) 18px, rgba(255,255,255,.22) 20px, transparent 20px);
+  padding-block: 28px 22px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; }
+.court-band h1 { font-family: var(--display); font-weight: 700; font-size: clamp(2.2rem, 6vw, 3.4rem); line-height: 1; margin: 0; letter-spacing: .01em; text-transform: uppercase; text-wrap: balance; }
+.court-band p { margin: 8px 0 0; opacity: .88; }
+.status { display: inline-block; margin-top: 12px; font-size: 13px; background: rgba(0,0,0,.22); padding: 4px 10px; border-radius: 999px; }
+
+.highlights { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: -1px; padding-block: 18px 6px; }
+.hl { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; min-width: 0; }
+.hl .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+.hl .big { font-family: var(--display); font-size: 1.6rem; font-weight: 700; line-height: 1.1; margin-top: 4px; overflow-wrap: anywhere; }
+.hl .sub { font-size: 13px; color: var(--muted); }
+
+.board { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; padding-block: 14px 48px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.side { display: grid; gap: 16px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+h2 { font-family: var(--display); font-weight: 600; font-size: 1.35rem; text-transform: uppercase; letter-spacing: .03em; margin: 0; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--line); background: var(--sunk); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
+.chip[aria-pressed="true"] { background: var(--court); color: var(--court-ink); border-color: var(--court); }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; background: var(--shuttle); color: var(--shuttle-ink); border-radius: 4px; padding: 1px 5px; }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+input[type=text], input[type=date], input[type=number], select {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0;
+}
+input[type=text] { flex: 1 1 140px; }
+label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; color: var(--muted); }
+
+.btn { border: 1px solid var(--line); background: var(--sunk); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--shuttle); color: var(--shuttle-ink); border-color: var(--shuttle); }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--loss); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* the mini court used to pick sides */
+.mini-court { border: 2px solid var(--court); border-radius: 8px; display: grid; grid-template-columns: 1fr auto 1fr; overflow: hidden; }
+.half { padding: 10px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.half .side-name { font-family: var(--display); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-size: 13px; }
+.half select { width: 100%; }
+.half input[type=number] { width: 100%; font-family: var(--display); font-size: 1.6rem; font-weight: 700; text-align: center; padding: 4px; font-variant-numeric: tabular-nums; }
+.net { width: 4px; background: repeating-linear-gradient(180deg, var(--court) 0 6px, transparent 6px 10px); }
+.msg { font-size: 13px; min-height: 1.2em; margin: 0; }
+.msg.err { color: var(--loss); }
+.msg.ok { color: var(--win); }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tab { border: 0; background: none; padding: 10px 14px; cursor: pointer; font-family: var(--display); font-size: 1.15rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--shuttle); }
+.tabpanel { padding-top: 14px; display: grid; gap: 12px; }
+
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 10px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.num, th.num { text-align: right; }
+td.rank { font-family: var(--display); font-weight: 700; font-size: 1.2rem; color: var(--muted); width: 2em; }
+tr.first td.rank { color: var(--shuttle); }
+.name { font-weight: 600; }
+.pos { color: var(--win); } .neg { color: var(--loss); }
+.form { display: inline-flex; gap: 3px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.dot.w { background: var(--win); } .dot.l { background: var(--loss); }
+
+.duo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.duo .names { font-weight: 600; overflow-wrap: anywhere; }
+.duo .stat { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.bar { grid-column: 1 / -1; height: 6px; background: var(--sunk); border-radius: 3px; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--court); }
+
+.day h3 { font-family: var(--display); font-size: 1.05rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 8px 0 4px; font-weight: 600; }
+.game { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.game .t { overflow-wrap: anywhere; }
+.game .t.right { text-align: right; }
+.game .won { font-weight: 700; }
+.game .score { font-family: var(--display); font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.game .x { display: flex; gap: 4px; }
+
+.empty { border: 1px dashed var(--line); border-radius: var(--r); padding: 22px; text-align: center; color: var(--muted); }
+.plist { display: grid; gap: 0; }
+.prow { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+
+@media (max-width: 860px) {
+  .board { grid-template-columns: minmax(0, 1fr); }
+  .side { position: static; }
+  .highlights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .game { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); }
+  .game .x { grid-column: 1 / -1; justify-content: flex-end; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bar > span { transition: width .4s ease; }
+}
+</style>
+</head>
+<body>
+
+<header class="court-band">
+  <div class="wrap">
+    <h1>Weekend Doubles</h1>
+    <p>Who carries, who gets carried, and which duo should never be split up.</p>
+    <span class="status" id="status">Connecting to the scorebook…</span>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="highlights" id="highlights" aria-label="Highlights"></section>
+
+  <div class="board">
+    <aside class="side">
+      <section class="panel" id="todayPanel">
+        <div>
+          <h2>Who's here today</h2>
+          <p class="hint">Tap names to mark who turned up. Only they show in the game picker.</p>
+        </div>
+        <div class="chips" id="presentChips"></div>
+        <form class="row" id="addPlayerForm" autocomplete="off">
+          <input type="text" id="newName" placeholder="Add a name" maxlength="24" aria-label="New player name">
+          <label class="check"><input type="checkbox" id="newGuest"> Guest</label>
+          <button class="btn" type="submit">Add</button>
+        </form>
+      </section>
+
+      <section class="panel" id="recordPanel">
+        <div class="row" style="justify-content: space-between;">
+          <h2>Record a game</h2>
+          <input type="date" id="gameDate" aria-label="Game date">
+        </div>
+        <div class="mini-court">
+          <div class="half">
+            <span class="side-name">Side A</span>
+            <select id="a1" aria-label="Side A player 1"></select>
+            <select id="a2" aria-label="Side A player 2"></select>
+            <input type="number" id="sa" min="0" max="99" inputmode="numeric" placeholder="21" aria-label="Side A points">
+          </div>
+          <div class="net" aria-hidden="true"></div>
+          <div class="half">
+            <span class="side-name">Side B</span>
+            <select id="b1" aria-label="Side B player 1"></select>
+            <select id="b2" aria-label="Side B player 2"></select>
+            <input type="number" id="sb" min="0" max="99" inputmode="numeric" placeholder="17" aria-label="Side B points">
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn ghost" type="button" id="suggestBtn">Suggest fair teams</button>
+          <button class="btn primary" type="button" id="saveBtn" style="margin-left:auto">Save game</button>
+        </div>
+        <p class="msg" id="recordMsg" role="status"></p>
+      </section>
+    </aside>
+
+    <section class="panel" style="padding-top: 6px;">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-standings" aria-selected="true" data-tab="standings">Standings</button>
+        <button class="tab" role="tab" id="tab-duos" aria-selected="false" data-tab="duos">Duos</button>
+        <button class="tab" role="tab" id="tab-games" aria-selected="false" data-tab="games">Games</button>
+        <button class="tab" role="tab" id="tab-players" aria-selected="false" data-tab="players">Players</button>
+      </div>
+      <div class="tabpanel" id="panel-standings"></div>
+      <div class="tabpanel" id="panel-duos" hidden></div>
+      <div class="tabpanel" id="panel-games" hidden></div>
+      <div class="tabpanel" id="panel-players" hidden></div>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+import { firebaseConfig } from "./firebase-config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// Thin wrapper so the app code below only sees collection().add/onSnapshot and doc().update/delete
+function connect(config) {
+  const fs = getFirestore(initializeApp(config));
+  return {
+    collection: (name) => ({
+      add: (data) => addDoc(collection(fs, name), data),
+      onSnapshot: (next, err) => onSnapshot(collection(fs, name),
+        (s) => next({ docs: s.docs.map((d) => ({ id: d.id, data: () => d.data() })) }), err),
+    }),
+    doc: (path) => {
+      const ref = doc(fs, path);
+      return { update: (data) => updateDoc(ref, data), delete: () => deleteDoc(ref) };
+    },
+  };
+}
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const fmtDate = (iso) => new Date(iso + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  const S = {
+    db: null, canWrite: true, connected: false,
+    players: new Map(), matches: [],
+    present: new Set(store.get("wd-present", [])),
+    presentDate: store.get("wd-present-date", ""),
+    showGuests: store.get("wd-guests", true),
+    tab: store.get("wd-tab", "standings"),
+    pendingDelete: null,
+  };
+  // "Who's here" resets each new day
+  if (S.presentDate !== today()) { S.present = new Set(); S.presentDate = today(); savePresent(); }
+  function savePresent() { store.set("wd-present", [...S.present]); store.set("wd-present-date", S.presentDate); }
+
+  $("gameDate").value = today();
+
+  /* ---------- stats ---------- */
+  const K = 32, START = 1000;
+  const pairKey = (x, y) => [x, y].sort().join("|");
+  const nameOf = (id) => S.players.get(id)?.name || "Unknown";
+  const isGuest = (id) => !!S.players.get(id)?.guest;
+
+  function compute() {
+    const ps = new Map();
+    const P = (id) => {
+      if (!ps.has(id)) ps.set(id, { id, games: 0, wins: 0, pf: 0, pa: 0, rating: START, results: [], streak: 0, best: 0 });
+      return ps.get(id);
+    };
+    const pairs = new Map();
+    let biggest = null;
+    const ordered = [...S.matches].sort((m, n) => (m.date || "").localeCompare(n.date || "") || (m.at || 0) - (n.at || 0));
+    for (const m of ordered) {
+      const A = m.a.map(P), B = m.b.map(P);
+      const ra = (A[0].rating + A[1].rating) / 2, rb = (B[0].rating + B[1].rating) / 2;
+      const ea = 1 / (1 + Math.pow(10, (rb - ra) / 400));
+      const aWon = m.sa > m.sb;
+      const delta = K * ((aWon ? 1 : 0) - ea);
+      const apply = (team, won, pf, pa, d) => team.forEach((p) => {
+        p.games++; p.pf += pf; p.pa += pa; p.rating += d; p.results.push(won ? "w" : "l");
+        if (won) { p.wins++; p.streak = p.streak > 0 ? p.streak + 1 : 1; p.best = Math.max(p.best, p.streak); }
+        else p.streak = p.streak < 0 ? p.streak - 1 : -1;
+      });
+      apply(A, aWon, m.sa, m.sb, delta);
+      apply(B, !aWon, m.sb, m.sa, -delta);
+      for (const [team, won, pf, pa] of [[m.a, aWon, m.sa, m.sb], [m.b, !aWon, m.sb, m.sa]]) {
+        const k = pairKey(team[0], team[1]);
+        if (!pairs.has(k)) pairs.set(k, { ids: k.split("|"), games: 0, wins: 0, pf: 0, pa: 0 });
+        const pr = pairs.get(k); pr.games++; if (won) pr.wins++; pr.pf += pf; pr.pa += pa;
+      }
+      const margin = Math.abs(m.sa - m.sb);
+      if (!biggest || margin > biggest.margin) biggest = { m, margin };
+    }
+    return { ps, pairs, biggest, ordered };
+  }
+
+  /* ---------- rendering ---------- */
+  function render() {
+    const st = compute();
+    renderHighlights(st);
+    renderPresent();
+    renderPickers();
+    renderStandings(st);
+    renderDuos(st);
+    renderGames(st);
+    renderPlayers(st);
+    $("recordPanel").hidden = !S.canWrite;
+    $("addPlayerForm").hidden = !S.canWrite;
+  }
+
+  function renderHighlights({ ps, pairs, biggest }) {
+    const list = [...ps.values()].filter((p) => p.games > 0 && S.players.has(p.id));
+    const top = [...list].sort((a, b) => b.rating - a.rating)[0];
+    const duo = [...pairs.values()].filter((d) => d.games >= 2)
+      .sort((a, b) => b.wins / b.games - a.wins / a.games || (b.pf - b.pa) - (a.pf - a.pa))[0];
+    const hot = [...list].sort((a, b) => b.streak - a.streak)[0];
+    const card = (lbl, big, sub) => `<div class="hl"><div class="lbl">${lbl}</div><div class="big">${big}</div><div class="sub">${sub}</div></div>`;
+    $("highlights").innerHTML = [
+      card("Top player", top ? esc(nameOf(top.id)) : "—", top ? `${Math.round(top.rating)} rating · ${top.wins}–${top.games - top.wins}` : "Play a game to find out"),
+      card("Best duo", duo ? esc(duo.ids.map(nameOf).join(" + ")) : "—", duo ? `${Math.round(100 * duo.wins / duo.games)}% wins over ${duo.games} games` : "Needs 2+ games together"),
+      card("On fire", hot && hot.streak > 1 ? esc(nameOf(hot.id)) : "—", hot && hot.streak > 1 ? `${hot.streak} wins in a row` : "Nobody on a streak yet"),
+      card("Biggest beatdown", biggest ? `${Math.max(biggest.m.sa, biggest.m.sb)}–${Math.min(biggest.m.sa, biggest.m.sb)}` : "—",
+        biggest ? esc((biggest.m.sa > biggest.m.sb ? biggest.m.a : biggest.m.b).map(nameOf).join(" + ")) + " · " + fmtDate(biggest.m.date) : "No games yet"),
+    ].join("");
+  }
+
+  const sortedPlayers = () => [...S.players.entries()].sort((a, b) => (a[1].guest - b[1].guest) || a[1].name.localeCompare(b[1].name));
+
+  function renderPresent() {
+    const el = $("presentChips");
+    if (!S.players.size) { el.innerHTML = `<p class="hint">No players yet. Add your crew below, one name at a time.</p>`; return; }
+    el.innerHTML = sortedPlayers().map(([id, p]) =>
+      `<button class="chip" type="button" data-id="${esc(id)}" aria-pressed="${S.present.has(id)}">${esc(p.name)}${p.guest ? '<span class="tag">Guest</span>' : ""}</button>`).join("");
+  }
+
+  const slots = ["a1", "a2", "b1", "b2"];
+  function renderPickers() {
+    const pool = sortedPlayers().filter(([id]) => S.present.size < 4 || S.present.has(id));
+    for (const s of slots) {
+      const sel = $(s), cur = sel.value;
+      sel.innerHTML = `<option value="">Pick player</option>` + pool.map(([id, p]) => `<option value="${esc(id)}">${esc(p.name)}</option>`).join("");
+      if (pool.some(([id]) => id === cur)) sel.value = cur;
+    }
+  }
+
+  function renderStandings({ ps }) {
+    const rows = [...ps.values()].filter((p) => p.games > 0 && S.players.has(p.id) && (S.showGuests || !isGuest(p.id)))
+      .sort((a, b) => b.rating - a.rating);
+    const toggle = `<label class="check"><input type="checkbox" id="guestToggle" ${S.showGuests ? "checked" : ""}> Show guests</label>`;
+    if (!rows.length) {
+      $("panel-standings").innerHTML = `<div class="empty">No games recorded yet. Mark who's here, pick two sides and save your first game. The table fills in from there.</div>`;
+      return;
+    }
+    $("panel-standings").innerHTML = `
+      <div class="row" style="justify-content:space-between"><p class="hint">Rating starts at 1000. Beat a stronger pair and you gain more; lose to a weaker one and you drop more.</p>${toggle}</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th></th><th>Player</th><th class="num">Rating</th><th class="num">W–L</th><th class="num">Win %</th><th class="num">Pts +/−</th><th>Last 5</th></tr></thead>
+        <tbody>${rows.map((p, i) => {
+          const diff = p.pf - p.pa;
+          return `<tr class="${i === 0 ? "first" : ""}">
+            <td class="rank">${i + 1}</td>
+            <td><span class="name">${esc(nameOf(p.id))}</span> ${isGuest(p.id) ? '<span class="tag">Guest</span>' : ""}</td>
+            <td class="num">${Math.round(p.rating)}</td>
+            <td class="num">${p.wins}–${p.games - p.wins}</td>
+            <td class="num">${Math.round(100 * p.wins / p.games)}%</td>
+            <td class="num ${diff > 0 ? "pos" : diff < 0 ? "neg" : ""}">${diff > 0 ? "+" : ""}${diff}</td>
+            <td><span class="form" aria-label="Last five results">${p.results.slice(-5).map((r) => `<span class="dot ${r}" title="${r === "w" ? "Win" : "Loss"}"></span>`).join("")}</span></td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table></div>`;
+  }
+
+  function renderDuos({ pairs }) {
+    const list = [...pairs.values()].filter((d) => d.ids.every((id) => S.players.has(id)))
+      .sort((a, b) => b.wins / b.games - a.wins / a.games || (b.pf - b.pa) - (a.pf - a.pa) || b.games - a.games);
+    const regulars = sortedPlayers().filter(([, p]) => !p.guest).map(([id]) => id);
+    const never = [];
+    for (let i = 0; i < regulars.length; i++) for (let j = i + 1; j < regulars.length; j++)
+      if (!pairs.has(pairKey(regulars[i], regulars[j]))) never.push([regulars[i], regulars[j]]);
+    if (!list.length) { $("panel-duos").innerHTML = `<div class="empty">Every pairing shows up here once it has played a game together, ranked by win rate.</div>`; return; }
+    $("panel-duos").innerHTML = `
+      <p class="hint">Ranked by win rate, then points difference. One game together is a coin flip, so trust the duos with a few games behind them.</p>
+      <div>${list.map((d) => {
+        const pct = Math.round(100 * d.wins / d.games), diff = d.pf - d.pa;
+        return `<div class="duo"><div class="names">${esc(d.ids.map(nameOf).join(" + "))}</div>
+          <div class="stat">${pct}% · ${d.wins}–${d.games - d.wins} · <span class="${diff > 0 ? "pos" : diff < 0 ? "neg" : ""}">${diff > 0 ? "+" : ""}${diff}</span></div>
+          <div class="bar"><span style="width:${pct}%"></span></div></div>`;
+      }).join("")}</div>
+      ${never.length ? `<div><h2 style="font-size:1.05rem;margin-top:8px">Never teamed up</h2><p class="hint">${never.map((p) => esc(p.map(nameOf).join(" + "))).join(" · ")}</p></div>` : ""}`;
+  }
+
+  function renderGames({ ordered }) {
+    if (!ordered.length) { $("panel-games").innerHTML = `<div class="empty">Saved games appear here, grouped by day, newest first.</div>`; return; }
+    const byDay = new Map();
+    for (const m of [...ordered].reverse()) { if (!byDay.has(m.date)) byDay.set(m.date, []); byDay.get(m.date).push(m); }
+    $("panel-games").innerHTML = [...byDay.entries()].map(([date, ms]) => `
+      <div class="day"><h3>${fmtDate(date)} · ${ms.length} game${ms.length > 1 ? "s" : ""}</h3>
+      ${ms.map((m) => {
+        const aWon = m.sa > m.sb;
+        const confirming = S.pendingDelete === m.id;
+        const x = !S.canWrite ? "<span></span>" : confirming
+          ? `<span class="x"><button class="btn danger" data-del="${esc(m.id)}">Delete</button><button class="btn ghost" data-cancel="1">Keep</button></span>`
+          : `<span class="x"><button class="btn ghost" data-ask="${esc(m.id)}" aria-label="Remove this game">✕</button></span>`;
+        return `<div class="game">
+          <span class="t ${aWon ? "won" : ""}">${esc(m.a.map(nameOf).join(" + "))}</span>
+          <span class="score">${m.sa}–${m.sb}</span>
+          <span class="t right ${!aWon ? "won" : ""}">${esc(m.b.map(nameOf).join(" + "))}</span>
+          ${x}</div>`;
+      }).join("")}</div>`).join("");
+  }
+
+  function renderPlayers({ ps }) {
+    if (!S.players.size) { $("panel-players").innerHTML = `<div class="empty">Your crew and any guests show up here.</div>`; return; }
+    $("panel-players").innerHTML = `<p class="hint">Guests count in games but can be hidden from the standings. Players with no games can be removed.</p>
+      <div class="plist">${sortedPlayers().map(([id, p]) => {
+        const g = ps.get(id)?.games || 0;
+        return `<div class="prow"><span><span class="name">${esc(p.name)}</span> ${p.guest ? '<span class="tag">Guest</span>' : ""} <span class="hint" style="display:inline">· ${g} game${g === 1 ? "" : "s"}</span></span>
+          ${S.canWrite ? `<span class="row"><button class="btn ghost" data-guest="${esc(id)}">${p.guest ? "Make regular" : "Mark as guest"}</button>
+          ${g === 0 ? `<button class="btn ghost danger" data-rmp="${esc(id)}">Remove</button>` : ""}</span>` : ""}</div>`;
+      }).join("")}</div>`;
+  }
+
+  function setTab(t) {
+    S.tab = t; store.set("wd-tab", t);
+    document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+    for (const n of ["standings", "duos", "games", "players"]) $("panel-" + n).hidden = n !== t;
+  }
+
+  /* ---------- actions ---------- */
+  const msg = (text, kind) => { const m = $("recordMsg"); m.textContent = text; m.className = "msg " + (kind || ""); };
+
+  function suggest() {
+    const pool = (S.present.size >= 4 ? [...S.present] : [...S.players.keys()]).filter((id) => S.players.has(id));
+    if (pool.length < 4) { msg("Mark at least four players as here today first.", "err"); return; }
+    const { ps, pairs } = compute();
+    const t = today();
+    const playedToday = (id) => S.matches.filter((m) => m.date === t && (m.a.includes(id) || m.b.includes(id))).length;
+    // whoever has sat out the most today plays next; ties broken randomly
+    const four = pool.map((id) => ({ id, n: playedToday(id), r: Math.random() })).sort((a, b) => a.n - b.n || a.r - b.r).slice(0, 4).map((x) => x.id);
+    const rating = (id) => ps.get(id)?.rating ?? START;
+    const together = (x, y) => pairs.get(pairKey(x, y))?.games || 0;
+    const splits = [[[0, 1], [2, 3]], [[0, 2], [1, 3]], [[0, 3], [1, 2]]].map(([a, b]) => {
+      const A = a.map((i) => four[i]), B = b.map((i) => four[i]);
+      const fresh = together(...A) + together(...B);
+      const gap = Math.abs(rating(A[0]) + rating(A[1]) - rating(B[0]) - rating(B[1]));
+      return { A, B, score: fresh * 100 + gap };
+    }).sort((x, y) => x.score - y.score);
+    const best = splits[0];
+    [$("a1").value, $("a2").value] = best.A; [$("b1").value, $("b2").value] = best.B;
+    msg(`Suggested: ${best.A.map(nameOf).join(" + ")} vs ${best.B.map(nameOf).join(" + ")}. Fresh pairings first, then closest ratings.`, "ok");
+  }
+
+  async function saveGame() {
+    if (!S.db) { msg("The scorebook isn't connected, so this game can't be saved.", "err"); return; }
+    const ids = slots.map((s) => $(s).value);
+    if (ids.some((v) => !v)) { msg("Pick two players for each side.", "err"); return; }
+    if (new Set(ids).size !== 4) { msg("Each player can only be on court once.", "err"); return; }
+    const sa = parseInt($("sa").value, 10), sb = parseInt($("sb").value, 10);
+    if (!Number.isFinite(sa) || !Number.isFinite(sb) || sa < 0 || sb < 0) { msg("Enter both scores.", "err"); return; }
+    if (sa === sb) { msg("Badminton has no draws. Check the scores.", "err"); return; }
+    const date = $("gameDate").value || today();
+    $("saveBtn").disabled = true;
+    try {
+      await S.db.collection("matches").add({ date, a: ids.slice(0, 2), b: ids.slice(2), sa, sb, at: Date.now() });
+      $("sa").value = ""; $("sb").value = "";
+      msg(`Saved: ${sa}–${sb} to ${(sa > sb ? ids.slice(0, 2) : ids.slice(2)).map(nameOf).join(" + ")}.`, "ok");
+    } catch (e) { failWrite(e); }
+    finally { $("saveBtn").disabled = false; }
+  }
+
+  function failWrite(e) {
+    if (e?.code === "permission-denied") msg("The scorebook refused that change. Check the Firestore rules in the README.", "err");
+    else if (e?.code === "resource-exhausted") msg("The free daily limit is used up. Try again tomorrow.", "err");
+    else msg("That didn't save. Check your connection and try again.", "err");
+  }
+
+  async function addPlayer(ev) {
+    ev.preventDefault();
+    const name = $("newName").value.trim().replace(/\s+/g, " ");
+    if (!name) return;
+    if (!S.db) { msg("The scorebook isn't connected, so players can't be added.", "err"); return; }
+    if ([...S.players.values()].some((p) => p.name.toLowerCase() === name.toLowerCase())) { $("newName").select(); return; }
+    try {
+      const ref = await S.db.collection("players").add({ name, guest: $("newGuest").checked, at: Date.now() });
+      S.present.add(ref.id); savePresent();
+      $("newName").value = ""; $("newGuest").checked = false;
+    } catch (e) { failWrite(e); }
+  }
+
+  document.addEventListener("click", async (ev) => {
+    const t = ev.target.closest("button, input");
+    if (!t) return;
+    if (t.classList.contains("tab")) return setTab(t.dataset.tab);
+    if (t.classList.contains("chip")) {
+      const id = t.dataset.id; S.present.has(id) ? S.present.delete(id) : S.present.add(id); savePresent(); renderPresent(); renderPickers(); return;
+    }
+    if (t.id === "guestToggle") { S.showGuests = t.checked; store.set("wd-guests", S.showGuests); render(); return; }
+    if (t.dataset.ask) { S.pendingDelete = t.dataset.ask; render(); return; }
+    if (t.dataset.cancel) { S.pendingDelete = null; render(); return; }
+    if (t.dataset.del) { S.pendingDelete = null; try { await S.db.doc("matches/" + t.dataset.del).delete(); } catch (e) { failWrite(e); } return; }
+    if (t.dataset.guest) { const p = S.players.get(t.dataset.guest); try { await S.db.doc("players/" + t.dataset.guest).update({ guest: !p.guest }); } catch (e) { failWrite(e); } return; }
+    if (t.dataset.rmp) { S.present.delete(t.dataset.rmp); savePresent(); try { await S.db.doc("players/" + t.dataset.rmp).delete(); } catch (e) { failWrite(e); } return; }
+  });
+  $("suggestBtn").addEventListener("click", suggest);
+  $("saveBtn").addEventListener("click", saveGame);
+  $("addPlayerForm").addEventListener("submit", addPlayer);
+
+  const setStatus = (t) => { $("status").textContent = t; };
+
+  /* ---------- boot ---------- */
+  setTab(["standings", "duos", "games", "players"].includes(S.tab) ? S.tab : "standings");
+  render();
+
+  (() => {
+    if (!firebaseConfig || !firebaseConfig.projectId) { S.canWrite = false; render(); setStatus("Setup needed · add your Firebase config to firebase-config.js"); return; }
+    let db;
+    try { db = connect(firebaseConfig); }
+    catch { S.canWrite = false; render(); setStatus("Couldn't start the scorebook. Check firebase-config.js."); return; }
+    S.db = db;
+    setStatus("Live · everyone sees new games instantly");
+    const onErr = () => setStatus("Lost the connection to the scorebook. Reload the page to reconnect.");
+    db.collection("players").onSnapshot((snap) => {
+      S.players = new Map(snap.docs.map((d) => [d.id, { name: String(d.data().name || "?"), guest: !!d.data().guest }]));
+      render();
+    }, onErr);
+    db.collection("matches").onSnapshot((snap) => {
+      S.matches = snap.docs.map((d) => {
+        const x = d.data();
+        return { id: d.id, date: String(x.date || ""), a: Array.isArray(x.a) ? x.a.slice(0, 2).map(String) : [], b: Array.isArray(x.b) ? x.b.slice(0, 2).map(String) : [], sa: Number(x.sa) || 0, sb: Number(x.sb) || 0, at: Number(x.at) || 0 };
+      }).filter((m) => m.a.length === 2 && m.b.length === 2);
+      render();
+    }, onErr);
+  })();
+})();
+</script>
+</body>
+</html>
