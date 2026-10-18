@@ -22,9 +22,11 @@ service cloud.firestore {
         && request.resource.data.sa <= 99 && request.resource.data.sb <= 99
         && request.resource.data.sa != request.resource.data.sb;
       allow delete: if true;
-      // Only the "unfinished" flag can be changed after a game is saved
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unfinished'])
-        && request.resource.data.unfinished is bool;
+      // Only the date and the "unfinished" flag can be changed after a game is saved
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unfinished', 'date'])
+        && (!('unfinished' in request.resource.data) || request.resource.data.unfinished is bool)
+        && request.resource.data.date is string
+        && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
     }
   }
 }

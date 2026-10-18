@@ -293,7 +293,20 @@ function connect(config) {
   if (S.presentDate !== today()) { S.present = new Set(); S.presentDate = today(); savePresent(); }
   function savePresent() { store.set("wd-present", [...S.present]); store.set("wd-present-date", S.presentDate); }
 
-  $("gameDate").value = today();
+  // Keep the game date on today even if the tab stays open overnight,
+  // unless someone deliberately picked another date for a past game.
+  let autoDate = today();
+  $("gameDate").value = autoDate;
+  function refreshDay() {
+    const t = today();
+    if (t === autoDate) return;
+    if ($("gameDate").value === autoDate) $("gameDate").value = t;
+    autoDate = t;
+    if (S.presentDate !== t) { S.present = new Set(); S.presentDate = t; savePresent(); render(); }
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshDay(); });
+  window.addEventListener("focus", refreshDay);
+  setInterval(refreshDay, 60000);
 
   /* ---------- stats ---------- */
   const K = 32, START = 1000;
@@ -510,7 +523,7 @@ function connect(config) {
     const aWon = m.sa > m.sb;
     const open = S.pendingDelete === m.id;
     const x = !S.canWrite ? "<span></span>" : open
-      ? `<span class="x"><button class="btn sm ghost" data-unf="${esc(m.id)}">${m.unfinished ? "Mark as finished" : "Mark unfinished"}</button><button class="btn sm danger" data-del="${esc(m.id)}">Delete</button><button class="btn sm ghost" data-cancel="1">Cancel</button></span>`
+      ? `<span class="x"><input type="date" class="move-date" data-move="${esc(m.id)}" value="${esc(m.date)}" aria-label="Change this game's date"><button class="btn sm ghost" data-unf="${esc(m.id)}">${m.unfinished ? "Mark as finished" : "Mark unfinished"}</button><button class="btn sm danger" data-del="${esc(m.id)}">Delete</button><button class="btn sm ghost" data-cancel="1">Cancel</button></span>`
       : `<span class="x"><button class="btn ghost" data-ask="${esc(m.id)}" aria-label="Game options">⋯</button></span>`;
     return `<div class="game ${open ? "open" : ""}">
       <span class="t ${aWon ? "won" : ""}">${esc(m.a.map(nameOf).join(" + "))}</span>
@@ -591,6 +604,7 @@ function connect(config) {
     const sa = parseInt($("sa").value, 10), sb = parseInt($("sb").value, 10);
     if (!Number.isFinite(sa) || !Number.isFinite(sb) || sa < 0 || sb < 0) { msg("Enter both scores.", "err"); return; }
     if (sa === sb) { msg("Badminton has no draws. Check the scores.", "err"); return; }
+    refreshDay();
     const date = $("gameDate").value || today();
     $("saveBtn").disabled = true;
     try {
@@ -646,6 +660,11 @@ function connect(config) {
   $("addPlayerForm").addEventListener("submit", addPlayer);
   document.addEventListener("change", (ev) => {
     if (ev.target.id === "daySel") { S.day = ev.target.value; S.pendingDelete = null; render(); }
+    const move = ev.target.dataset?.move;
+    if (move && /^\d{4}-\d{2}-\d{2}$/.test(ev.target.value)) {
+      S.pendingDelete = null;
+      S.db.doc("matches/" + move).update({ date: ev.target.value }).catch(failWrite);
+    }
   });
 
   const setStatus = (t) => { $("status").textContent = t; };
