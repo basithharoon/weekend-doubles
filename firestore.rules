@@ -13,7 +13,8 @@ service cloud.firestore {
     }
     match /matches/{id} {
       allow read: if true;
-      allow create: if request.resource.data.keys().hasOnly(['date', 'a', 'b', 'sa', 'sb', 'at'])
+      allow create: if request.resource.data.keys().hasOnly(['date', 'a', 'b', 'sa', 'sb', 'at', 'unfinished'])
+        && (!('unfinished' in request.resource.data) || request.resource.data.unfinished is bool)
         && request.resource.data.a is list && request.resource.data.a.size() == 2
         && request.resource.data.b is list && request.resource.data.b.size() == 2
         && request.resource.data.sa is int && request.resource.data.sb is int
@@ -21,7 +22,9 @@ service cloud.firestore {
         && request.resource.data.sa <= 99 && request.resource.data.sb <= 99
         && request.resource.data.sa != request.resource.data.sb;
       allow delete: if true;
-      allow update: if false;
+      // Only the "unfinished" flag can be changed after a game is saved
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unfinished'])
+        && request.resource.data.unfinished is bool;
     }
   }
 }

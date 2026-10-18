@@ -139,6 +139,27 @@ tr.first td.rank { color: var(--shuttle); }
 .plist { display: grid; gap: 0; }
 .prow { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 
+.tag.soft { background: var(--sunk); color: var(--muted); border: 1px solid var(--line); vertical-align: middle; }
+.game.open .x { grid-column: 1 / -1; justify-content: flex-end; flex-wrap: wrap; }
+.btn.sm { padding: 5px 10px; font-size: 13px; }
+
+.subhead { font-family: var(--display); font-weight: 600; font-size: 1.1rem; text-transform: uppercase; letter-spacing: .04em; margin: 10px 0 0; }
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.kv .k { color: var(--muted); }
+.kv .v { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+
+.potd { background: var(--sunk); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 2px; }
+.potd .big { font-family: var(--display); font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+
+.profile { display: grid; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.profile .top { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.fact { background: var(--sunk); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.fact .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+.fact .val { font-weight: 600; overflow-wrap: anywhere; }
+.fact .sub { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 560px) { .facts { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 860px) {
   .board { grid-template-columns: minmax(0, 1fr); }
   .side { position: static; }
@@ -203,6 +224,7 @@ tr.first td.rank { color: var(--shuttle); }
             <input type="number" id="sb" min="0" max="99" inputmode="numeric" placeholder="–" aria-label="Side B points">
           </div>
         </div>
+        <label class="check"><input type="checkbox" id="unfinished"> Unfinished (court time ran out)</label>
         <div class="row">
           <button class="btn ghost" type="button" id="suggestBtn">Suggest fair teams</button>
           <button class="btn primary" type="button" id="saveBtn" style="margin-left:auto">Save game</button>
@@ -264,6 +286,7 @@ function connect(config) {
     presentDate: store.get("wd-present-date", ""),
     showGuests: store.get("wd-guests", true),
     tab: store.get("wd-tab", "standings"),
+    day: "",
     pendingDelete: null,
   };
   // "Who's here" resets each new day
@@ -310,6 +333,54 @@ function connect(config) {
     }
     return { ps, pairs, biggest, ordered };
   }
+
+  // Each partner's record with this player, best and worst partner, and partner boost:
+  // how much better partners do with this player than in their games without them (in % points).
+  function partnerStats(id, { ps, pairs }) {
+    const list = [];
+    let gain = 0, counted = 0;
+    for (const pr of pairs.values()) {
+      if (!pr.ids.includes(id)) continue;
+      const other = pr.ids[0] === id ? pr.ids[1] : pr.ids[0];
+      list.push({ id: other, games: pr.games, wins: pr.wins, diff: pr.pf - pr.pa });
+      const o = ps.get(other), restGames = o.games - pr.games;
+      if (restGames > 0) { gain += pr.wins - pr.games * ((o.wins - pr.wins) / restGames); counted += pr.games; }
+    }
+    const rank = (a, b) => b.wins / b.games - a.wins / a.games || b.diff - a.diff || b.games - a.games;
+    list.sort(rank);
+    return {
+      best: list[0] || null,
+      worst: list.length > 1 ? list[list.length - 1] : null,
+      boost: counted ? (100 * gain) / counted : null,
+      boostGames: counted,
+    };
+  }
+
+  function records({ ps, ordered }) {
+    const out = [];
+    const streakers = [...ps.values()].filter((p) => S.players.has(p.id) && p.best > 1);
+    const maxStreak = Math.max(0, ...streakers.map((p) => p.best));
+    if (maxStreak) out.push(["Longest win streak", `${streakers.filter((p) => p.best === maxStreak).map((p) => esc(nameOf(p.id))).join(", ")} · ${maxStreak} in a row`]);
+    const days = new Map();
+    for (const m of ordered) days.set(m.date, (days.get(m.date) || 0) + 1);
+    const busiest = [...days.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (busiest) out.push(["Most games in a day", `${busiest[1]} games · ${fmtDate(busiest[0])}`]);
+    const dayWins = new Map();
+    for (const m of ordered) for (const id of (m.sa > m.sb ? m.a : m.b)) { const k = id + "|" + m.date; dayWins.set(k, (dayWins.get(k) || 0) + 1); }
+    const topDay = [...dayWins.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (topDay) { const [id, date] = topDay[0].split("|"); out.push(["Most wins in a day", `${esc(nameOf(id))} · ${topDay[1]} wins · ${fmtDate(date)}`]); }
+    const lost = ordered.map((m) => ({ m, lose: Math.min(m.sa, m.sb) })).sort((a, b) => b.lose - a.lose)[0];
+    if (lost) {
+      const { m } = lost, aLost = m.sa < m.sb;
+      out.push(["Highest losing score", `${esc((aLost ? m.a : m.b).map(nameOf).join(" + "))} lost ${Math.max(m.sa, m.sb)}–${lost.lose} · ${fmtDate(m.date)}`]);
+    }
+    const unfinished = ordered.filter((m) => m.unfinished).length;
+    if (unfinished) out.push(["Unfinished games", `${unfinished} (court time ran out)`]);
+    return out;
+  }
+
+  const signed = (n) => (n > 0 ? "+" : "") + n;
+  const tone = (n) => (n > 0 ? "pos" : n < 0 ? "neg" : "");
 
   /* ---------- rendering ---------- */
   function render() {
@@ -360,7 +431,8 @@ function connect(config) {
     }
   }
 
-  function renderStandings({ ps }) {
+  function renderStandings(st) {
+    const { ps } = st;
     const rows = [...ps.values()].filter((p) => p.games > 0 && S.players.has(p.id) && (S.showGuests || !isGuest(p.id)))
       .sort((a, b) => b.rating - a.rating);
     const toggle = `<label class="check"><input type="checkbox" id="guestToggle" ${S.showGuests ? "checked" : ""}> Show guests</label>`;
@@ -371,9 +443,10 @@ function connect(config) {
     $("panel-standings").innerHTML = `
       <div class="row" style="justify-content:space-between"><p class="hint">Rating starts at 1000. Beat a stronger pair and you gain more; lose to a weaker one and you drop more.</p>${toggle}</div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th></th><th>Player</th><th class="num">Rating</th><th class="num">W–L</th><th class="num">Win %</th><th class="num">Pts +/−</th><th>Last 5</th></tr></thead>
+        <thead><tr><th></th><th>Player</th><th class="num">Rating</th><th class="num">W–L</th><th class="num">Win %</th><th class="num">Pts +/−</th><th class="num" title="How much better partners win with this player than without them">Partner boost</th><th>Last 5</th></tr></thead>
         <tbody>${rows.map((p, i) => {
           const diff = p.pf - p.pa;
+          const boost = partnerStats(p.id, st).boost;
           return `<tr class="${i === 0 ? "first" : ""}">
             <td class="rank">${i + 1}</td>
             <td><span class="name">${esc(nameOf(p.id))}</span> ${isGuest(p.id) ? '<span class="tag">Guest</span>' : ""}</td>
@@ -381,10 +454,14 @@ function connect(config) {
             <td class="num">${p.wins}–${p.games - p.wins}</td>
             <td class="num">${Math.round(100 * p.wins / p.games)}%</td>
             <td class="num ${diff > 0 ? "pos" : diff < 0 ? "neg" : ""}">${diff > 0 ? "+" : ""}${diff}</td>
+            <td class="num ${boost == null ? "" : tone(Math.round(boost))}">${boost == null ? "—" : signed(Math.round(boost)) + "%"}</td>
             <td><span class="form" aria-label="Last five results">${p.results.slice(-5).map((r) => `<span class="dot ${r}" title="${r === "w" ? "Win" : "Loss"}"></span>`).join("")}</span></td>
           </tr>`;
         }).join("")}</tbody>
-      </table></div>`;
+      </table></div>
+      <p class="hint">Partner boost compares how often your partners win with you against how often they win without you. +20% means partners win 20% more games when paired with you.</p>
+      <h3 class="subhead">Records</h3>
+      <div>${records(st).map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("")}</div>`;
   }
 
   function renderDuos({ pairs }) {
@@ -406,34 +483,73 @@ function connect(config) {
       ${never.length ? `<div><h2 style="font-size:1.05rem;margin-top:8px">Never teamed up</h2><p class="hint">${never.map((p) => esc(p.map(nameOf).join(" + "))).join(" · ")}</p></div>` : ""}`;
   }
 
+  function daySummary(ms) {
+    const t = new Map();
+    for (const m of ms) {
+      const aWon = m.sa > m.sb;
+      for (const [team, won, pf, pa] of [[m.a, aWon, m.sa, m.sb], [m.b, !aWon, m.sb, m.sa]])
+        for (const id of team) {
+          const r = t.get(id) || { id, games: 0, wins: 0, diff: 0 };
+          r.games++; if (won) r.wins++; r.diff += pf - pa; t.set(id, r);
+        }
+    }
+    const rows = [...t.values()].sort((a, b) => b.wins - a.wins || b.diff - a.diff);
+    const star = rows[0];
+    return `
+      <div class="potd"><span class="hint">Player of the day</span>
+        <span class="big">${esc(nameOf(star.id))}</span>
+        <span class="hint">${star.wins}–${star.games - star.wins} · ${signed(star.diff)} points</span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Player</th><th class="num">W–L</th><th class="num">Win %</th><th class="num">Pts +/−</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr><td class="name">${esc(nameOf(r.id))}</td><td class="num">${r.wins}–${r.games - r.wins}</td>
+          <td class="num">${Math.round(100 * r.wins / r.games)}%</td><td class="num ${tone(r.diff)}">${signed(r.diff)}</td></tr>`).join("")}</tbody>
+      </table></div>`;
+  }
+
+  function gameRow(m) {
+    const aWon = m.sa > m.sb;
+    const open = S.pendingDelete === m.id;
+    const x = !S.canWrite ? "<span></span>" : open
+      ? `<span class="x"><button class="btn sm ghost" data-unf="${esc(m.id)}">${m.unfinished ? "Mark as finished" : "Mark unfinished"}</button><button class="btn sm danger" data-del="${esc(m.id)}">Delete</button><button class="btn sm ghost" data-cancel="1">Cancel</button></span>`
+      : `<span class="x"><button class="btn ghost" data-ask="${esc(m.id)}" aria-label="Game options">⋯</button></span>`;
+    return `<div class="game ${open ? "open" : ""}">
+      <span class="t ${aWon ? "won" : ""}">${esc(m.a.map(nameOf).join(" + "))}</span>
+      <span class="score">${m.sa}–${m.sb}${m.unfinished ? ' <span class="tag soft" title="Court time ran out">Unfinished</span>' : ""}</span>
+      <span class="t right ${!aWon ? "won" : ""}">${esc(m.b.map(nameOf).join(" + "))}</span>
+      ${x}</div>`;
+  }
+
   function renderGames({ ordered }) {
     if (!ordered.length) { $("panel-games").innerHTML = `<div class="empty">Saved games appear here, grouped by day, newest first.</div>`; return; }
     const byDay = new Map();
     for (const m of [...ordered].reverse()) { if (!byDay.has(m.date)) byDay.set(m.date, []); byDay.get(m.date).push(m); }
-    $("panel-games").innerHTML = [...byDay.entries()].map(([date, ms]) => `
+    if (S.day && !byDay.has(S.day)) S.day = "";
+    const picker = `<div class="row"><label class="check" for="daySel">Show</label>
+      <select id="daySel"><option value="">All days</option>${[...byDay.keys()].map((d) =>
+        `<option value="${esc(d)}" ${d === S.day ? "selected" : ""}>${fmtDate(d)} (${byDay.get(d).length})</option>`).join("")}</select></div>`;
+    const days = S.day ? [[S.day, byDay.get(S.day)]] : [...byDay.entries()];
+    $("panel-games").innerHTML = picker + (S.day ? daySummary(byDay.get(S.day)) : "") + days.map(([date, ms]) => `
       <div class="day"><h3>${fmtDate(date)} · ${ms.length} game${ms.length > 1 ? "s" : ""}</h3>
-      ${ms.map((m) => {
-        const aWon = m.sa > m.sb;
-        const confirming = S.pendingDelete === m.id;
-        const x = !S.canWrite ? "<span></span>" : confirming
-          ? `<span class="x"><button class="btn danger" data-del="${esc(m.id)}">Delete</button><button class="btn ghost" data-cancel="1">Keep</button></span>`
-          : `<span class="x"><button class="btn ghost" data-ask="${esc(m.id)}" aria-label="Remove this game">✕</button></span>`;
-        return `<div class="game">
-          <span class="t ${aWon ? "won" : ""}">${esc(m.a.map(nameOf).join(" + "))}</span>
-          <span class="score">${m.sa}–${m.sb}</span>
-          <span class="t right ${!aWon ? "won" : ""}">${esc(m.b.map(nameOf).join(" + "))}</span>
-          ${x}</div>`;
-      }).join("")}</div>`).join("");
+      ${ms.map(gameRow).join("")}</div>`).join("");
   }
 
-  function renderPlayers({ ps }) {
+  function renderPlayers(st) {
+    const { ps } = st;
     if (!S.players.size) { $("panel-players").innerHTML = `<div class="empty">Your crew and any guests show up here.</div>`; return; }
-    $("panel-players").innerHTML = `<p class="hint">Guests count in games but can be hidden from the standings. Players with no games can be removed.</p>
+    const partner = (x) => x ? `<div class="val">${esc(nameOf(x.id))}</div><div class="sub">${x.wins}–${x.games - x.wins} together · ${signed(x.diff)} pts</div>` : `<div class="val">—</div><div class="sub">Needs games with 2+ partners</div>`;
+    $("panel-players").innerHTML = `<p class="hint">Each player's best and toughest partner so far, and how much they lift whoever they play with.</p>
       <div class="plist">${sortedPlayers().map(([id, p]) => {
         const g = ps.get(id)?.games || 0;
-        return `<div class="prow"><span><span class="name">${esc(p.name)}</span> ${p.guest ? '<span class="tag">Guest</span>' : ""} <span class="hint" style="display:inline">· ${g} game${g === 1 ? "" : "s"}</span></span>
-          ${S.canWrite ? `<span class="row"><button class="btn ghost" data-guest="${esc(id)}">${p.guest ? "Make regular" : "Mark as guest"}</button>
-          ${g === 0 ? `<button class="btn ghost danger" data-rmp="${esc(id)}">Remove</button>` : ""}</span>` : ""}</div>`;
+        const pst = g ? partnerStats(id, st) : null;
+        return `<div class="profile"><div class="top"><span><span class="name">${esc(p.name)}</span> ${p.guest ? '<span class="tag">Guest</span>' : ""} <span class="hint" style="display:inline">· ${g} game${g === 1 ? "" : "s"}</span></span>
+          ${S.canWrite ? `<span class="row"><button class="btn sm ghost" data-guest="${esc(id)}">${p.guest ? "Make regular" : "Mark as guest"}</button>
+          ${g === 0 ? `<button class="btn sm ghost danger" data-rmp="${esc(id)}">Remove</button>` : ""}</span>` : ""}</div>
+          ${pst ? `<div class="facts">
+            <div class="fact"><div class="lbl">Best partner</div>${partner(pst.best)}</div>
+            <div class="fact"><div class="lbl">Toughest partner</div>${partner(pst.worst)}</div>
+            <div class="fact"><div class="lbl">Partner boost</div>${pst.boost == null ? `<div class="val">—</div><div class="sub">Not enough games yet</div>` :
+              `<div class="val ${tone(Math.round(pst.boost))}">${signed(Math.round(pst.boost))}%</div><div class="sub">over ${pst.boostGames} games</div>`}</div>
+          </div>` : ""}</div>`;
       }).join("")}</div>`;
   }
 
@@ -478,8 +594,10 @@ function connect(config) {
     const date = $("gameDate").value || today();
     $("saveBtn").disabled = true;
     try {
-      await S.db.collection("matches").add({ date, a: ids.slice(0, 2), b: ids.slice(2), sa, sb, at: Date.now() });
-      $("sa").value = ""; $("sb").value = "";
+      const game = { date, a: ids.slice(0, 2), b: ids.slice(2), sa, sb, at: Date.now() };
+      if ($("unfinished").checked) game.unfinished = true;
+      await S.db.collection("matches").add(game);
+      $("sa").value = ""; $("sb").value = ""; $("unfinished").checked = false;
       msg(`Saved: ${sa}–${sb} to ${(sa > sb ? ids.slice(0, 2) : ids.slice(2)).map(nameOf).join(" + ")}.`, "ok");
     } catch (e) { failWrite(e); }
     finally { $("saveBtn").disabled = false; }
@@ -514,6 +632,11 @@ function connect(config) {
     if (t.id === "guestToggle") { S.showGuests = t.checked; store.set("wd-guests", S.showGuests); render(); return; }
     if (t.dataset.ask) { S.pendingDelete = t.dataset.ask; render(); return; }
     if (t.dataset.cancel) { S.pendingDelete = null; render(); return; }
+    if (t.dataset.unf) {
+      const m = S.matches.find((x) => x.id === t.dataset.unf); S.pendingDelete = null; render();
+      try { await S.db.doc("matches/" + t.dataset.unf).update({ unfinished: !m?.unfinished }); } catch (e) { failWrite(e); }
+      return;
+    }
     if (t.dataset.del) { S.pendingDelete = null; try { await S.db.doc("matches/" + t.dataset.del).delete(); } catch (e) { failWrite(e); } return; }
     if (t.dataset.guest) { const p = S.players.get(t.dataset.guest); try { await S.db.doc("players/" + t.dataset.guest).update({ guest: !p.guest }); } catch (e) { failWrite(e); } return; }
     if (t.dataset.rmp) { S.present.delete(t.dataset.rmp); savePresent(); try { await S.db.doc("players/" + t.dataset.rmp).delete(); } catch (e) { failWrite(e); } return; }
@@ -521,6 +644,9 @@ function connect(config) {
   $("suggestBtn").addEventListener("click", suggest);
   $("saveBtn").addEventListener("click", saveGame);
   $("addPlayerForm").addEventListener("submit", addPlayer);
+  document.addEventListener("change", (ev) => {
+    if (ev.target.id === "daySel") { S.day = ev.target.value; S.pendingDelete = null; render(); }
+  });
 
   const setStatus = (t) => { $("status").textContent = t; };
 
@@ -543,7 +669,7 @@ function connect(config) {
     db.collection("matches").onSnapshot((snap) => {
       S.matches = snap.docs.map((d) => {
         const x = d.data();
-        return { id: d.id, date: String(x.date || ""), a: Array.isArray(x.a) ? x.a.slice(0, 2).map(String) : [], b: Array.isArray(x.b) ? x.b.slice(0, 2).map(String) : [], sa: Number(x.sa) || 0, sb: Number(x.sb) || 0, at: Number(x.at) || 0 };
+        return { id: d.id, date: String(x.date || ""), a: Array.isArray(x.a) ? x.a.slice(0, 2).map(String) : [], b: Array.isArray(x.b) ? x.b.slice(0, 2).map(String) : [], sa: Number(x.sa) || 0, sb: Number(x.sb) || 0, at: Number(x.at) || 0, unfinished: x.unfinished === true };
       }).filter((m) => m.a.length === 2 && m.b.length === 2);
       render();
     }, onErr);
